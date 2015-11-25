@@ -1,0 +1,28 @@
+unit uAutoCalcSettings;
+
+interface
+
+uses
+  Windows, Messages, SysUtils, Variants, Classes, Graphics, Controls, Forms,
+  Dialogs, StdCtrls;
+
+type
+  TfAutoCalcSettings = class(TForm)
+    Label1: TLabel;
+    eTime: TEdit;
+    bOk: TButton;
+    bCancel: TButton;
+  private
+    { Private declarations }
+  public
+    { Public declarations }
+  end;
+
+var
+  fAutoCalcSettings: TfAutoCalcSettings;
+
+implementation
+
+{$R *.dfm}
+
+end.

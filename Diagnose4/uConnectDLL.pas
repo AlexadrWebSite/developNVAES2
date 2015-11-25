@@ -1,0 +1,53 @@
+unit uConnectDLL;
+//----------------------------------------------------------------------------------------
+// ѕеречень функций дл€ доступа к данным через  'libicis.dll'
+// на Ќ¬јЁ—-2
+// јвтор: —еменихин ј.¬. semenikhinav@mail.ru
+// ƒата создани€: 05/11/2015
+//----------------------------------------------------------------------------------------
+
+interface
+
+function CreateChannel(ClientID:integer;IPAdress:Pchar;Port:integer;TypeChannel:integer;Options:integer):Longint;cdecl;varargs; external 'libicis.dll';
+function Insert(ClientId:integer;GetID:integer;KKS:Pchar;XX:integer;YY:integer):integer; cdecl	;varargs;external 'libicis.dll';
+procedure CopyLayer(ClientID,GetID:integer); cdecl	;varargs;external 'libicis.dll';
+procedure Subscribe(ClientID,GetID:integer); cdecl	;varargs;external 'libicis.dll';
+function GetFloat(ClientId,GetId,index:integer): real;  cdecl	;varargs;external 'libicis.dll';
+procedure Unsubscribe(ClientId,GetId:integer);cdecl	; varargs;external 'libicis.dll';
+function InitModLib(name:String): integer;cdecl	;varargs;external 'libicis.dll';
+procedure ShutdownModLib( ClientID:integer);cdecl	;varargs;external 'libicis.dll';
+function GetChannelStatus(ClientID:integer; GetID:integer):integer;cdecl;varargs;external 'libicis.dll';
+function GetStatus( ClientID:integer; ChannelID:integer;ParamID:integer):integer;cdecl;varargs;external 'libicis.dll';
+const
+CH_CALC_GET_DATA=1;      //канал, осуществл€ющий прием данных из шлюза
+CH_CALC_PUT_DATA=2;      //канал, осуществл€ющий отсылку данных в шлюз
+//флаги канала
+OPT_ENABLE_REAL_TIME    =$01;   //разрешить использовать системное врем€ в пакетах
+OPT_INVALIDATE_STATUS   =$02;  //после подписки параметры инициализируютс€ недостоверными значени€ми
+OPT_STAY_DISCONNECTED   =$04;   //при создании канала св€зь устанавливаетс€ только после вызова Connect()
+OPT_ENABLE_SUBSCRIPTION =$08;   //разрешить подписку
+OPT_REMAIN_QUALIFIED    =$10;   //после закрыти€ канала значени€ в шлюзе остаютс€ достоверными
+OPT_ENABLE_DIAGNOSTICS  =                 $20;   //разрешить печатать диагностические сообщени€ на экран
+OPT_BLOCKING_COPY_LAYER =                 $40;   //разрешить блокирование вызова CopyLayer()
+OPT_ENABLE_INPUT_BUFFER =                 $80;   //разрешить работу приемного буфера (дл€ канала CH_CALC_GET_DATA)
+// статусы канала
+D_STATUS_CONNECTED      =                 $01;   //канал осуществил соединение
+D_STATUS_SUBSCRIBED     =                 $02;   //канал завершил подписку на сигналы
+D_STATUS_UNSUBSCRIBED   =                 $04;   //канал завершил работу (основной поток завершилс€)
+D_STATUS_UPDATED        =                 $08;   //поступили новые данные (дл€ канала CH_CALC_GET_DATA)
+D_STATUS_ERROR          =                 $10;   //соединение разорвано из-за сетевой ошибки
+//статусы сигнала
+D_STATUS_NORMAL         =                 0;      //значение достоверно
+D_STATUS_NRG            =                 1;      //значение сигнала ниже нижней регламентной границы
+D_STATUS_VRG            =                 2;      //значение сигнала выше верхней регламентной границы
+D_STATUS_NAG            =                 3;      //значение сигнала ниже нижней аварийной границы
+D_STATUS_VAG            =                 4;      //значение сигнала выше верхней аварийной границы
+D_STATUS_NVG            =                 5;      //значение сигнала ниже нижней возможной границы
+D_STATUS_VVG            =                 6;      //значение сигнала выше верхней возможной границы
+D_STATUS_UNDEF          =                 7;      //значение сигнала недостоверно
+
+
+implementation
+
+end.
+ 

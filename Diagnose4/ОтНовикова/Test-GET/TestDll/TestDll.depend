@@ -1,0 +1,26 @@
+# depslib dependency file v1.0
+1421948136 source:c:\codes\mingw\test\main.c
+	<stdio.h>
+	<unistd.h>
+	"windows.h"
+	"GUModUI.h"
+
+1421931904 c:\codes\mingw\test\gumodui.h
+	<windows.h>
+
+1421948877 source:c:\codes\mingw\test-put\main.c
+	<stdio.h>
+	<unistd.h>
+	"GUModUI.h"
+
+1421948015 c:\codes\mingw\test-put\gumodui.h
+	<windows.h>
+
+1421949179 source:c:\codes\mingw\test-get\main.c
+	<stdio.h>
+	<unistd.h>
+	"GUModUI.h"
+
+1421948015 c:\codes\mingw\test-get\gumodui.h
+	<windows.h>
+

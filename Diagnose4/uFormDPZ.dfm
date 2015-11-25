@@ -1,0 +1,33 @@
+object fFormDPZ: TfFormDPZ
+  Left = 270
+  Top = 227
+  Width = 870
+  Height = 640
+  Caption = 'fFormDPZ'
+  Color = clBtnFace
+  Font.Charset = DEFAULT_CHARSET
+  Font.Color = clWindowText
+  Font.Height = -11
+  Font.Name = 'MS Sans Serif'
+  Font.Style = []
+  OldCreateOrder = False
+  OnCreate = FormCreate
+  DesignSize = (
+    854
+    602)
+  PixelsPerInch = 96
+  TextHeight = 13
+  object sgDPZ: TStringGrid
+    Left = 8
+    Top = 32
+    Width = 841
+    Height = 537
+    Anchors = [akLeft, akTop, akRight, akBottom]
+    ColCount = 8
+    DefaultColWidth = 100
+    DefaultDrawing = False
+    RowCount = 55
+    TabOrder = 0
+    OnDrawCell = sgDPZDrawCell
+  end
+end

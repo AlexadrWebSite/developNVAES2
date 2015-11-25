@@ -1,0 +1,100 @@
+program Diagnose;
+
+uses
+  Forms,
+  SysUtils,
+  IniFiles,
+  uMain in 'uMain.pas' {fMain},
+  uBuffer in 'uBuffer.pas',
+  uRegimeForm in 'uRegimeForm.pas' {fRegime},
+  uRegime in 'uRegime.pas',
+  uNPPUnit in 'uNPPUnit.pas',
+  uDescription in 'uDescription.pas',
+  uWelcome in 'uWelcome.pas' {fWelcome},
+  uAutoCalcSettings in 'uAutoCalcSettings.pas' {fAutoCalcSettings},
+  uTimeScheduler in 'uTimeScheduler.pas',
+  uCalcParam in 'uCalcParam.pas',
+  uDataModule in 'uDataModule.pas' {FDataModule: TDataModule},
+  uGenTech in 'uGenTech.pas',
+  uParamInfo in 'uParamInfo.pas' {fParamInfo},
+  uParal in 'uParal.pas' {fParal},
+  uTC in 'uTC.pas',
+  uTCform in 'uTCform.pas' {fTCform},
+  uArchive in 'uArchive.pas',
+  uDPZ in 'uDPZ.pas',
+  uSrvCoreTVS in 'uSrvCoreTVS.pas',
+  uFormDPZ in 'uFormDPZ.pas' {fFormDPZ},
+  uPowerCalc in 'uPowerCalc.pas',
+  uDLL in 'uDLL.pas',
+  uN in 'uN.pas',
+  uPowerCalcForm in 'uPowerCalcForm.pas' {fPowerCalcForm},
+  uConnectDLL in 'uConnectDLL.pas',
+  uAKNP in 'uAKNP.pas',
+  uNetSend in 'uNetSend.pas',
+  uDebugForm in 'uDebugForm.pas' {fDebugForm},
+  uPTKZ in 'uPTKZ.pas' {fPTKZ},
+  uStringOperation in 'uStringOperation.pas';
+
+{$R *.res}
+var
+
+
+  IniName:string;
+  IniFile:TIniFile;
+begin
+  Application.Initialize;
+  Application.CreateForm(TfMain, fMain);
+  Application.CreateForm(TfAutoCalcSettings, fAutoCalcSettings);
+  Application.CreateForm(TfDataModule, DataModule);
+  Application.CreateForm(TfParamInfo, fParamInfo);
+  Application.CreateForm(TfParal, fParal);
+  Application.CreateForm(TfTCform, fTCform);
+  Application.CreateForm(TfFormDPZ, fFormDPZ);
+  Application.CreateForm(TfPowerCalcForm, fPowerCalcForm);
+  Application.CreateForm(TfDebugForm, fDebugForm);
+  Application.CreateForm(TfPTKZ, fPTKZ);
+  Application.ShowMainForm := False;
+  Application.CreateForm(TfWelcome, fWelcome);
+
+  Application.CreateForm(TfWelcome, fWelcome);
+  fWelcome.Show;
+{  IniName:=copy(Application.ExeName,1,length(Application.ExeName)-3)+'ini';
+  Inifile:=TIniFile.Create(iniName);
+  DataModule.ADOConnection.ConnectionString:=LoadConnectionString(IniFile);// сформировали строку для подсоединения к БД
+
+  fMain.InitalizeCalcParam; //Запрос к БД по параметрам проверки на достоверность
+  application.processmessages;
+  fMain.InitalizeGenTech;//Запрос к БД по списку общетехнологических параметров
+  application.processmessages;
+}
+  if fMain.ConnectToServer then
+  begin
+
+    Sleep(500);
+    fMain.LoadKKSSendKKS;
+    Sleep(500);
+    fMain.CheckStateInitalize;
+    fMain.InitalizeCheckState;
+  end;
+  IniName:=copy(Application.ExeName,1,length(Application.ExeName)-3)+'ini';
+  Inifile:=TIniFile.Create(iniName);
+  DataModule.ADOConnection.ConnectionString:=LoadConnectionString(IniFile);// сформировали строку для подсоединения к БД
+  DataModule.ADOConnectionArc.ConnectionString:=LoadConnectionArcString(IniFile);// сформировали строку для подсоединения к БД
+
+  fMain.InitalizeCalcParam; //Запрос к БД по параметрам проверки на достоверность
+  application.processmessages;
+  fMain.InitalizeGenTech;//Запрос к БД по списку общетехнологических параметров
+  fMain.InitalizeTC; //Инициализация температурного контроля
+  fMain.InitalizeDPZ;//Инициализация проверки токов ДПЗ
+  fMain.InitalizeN; //Инициализация расчета мощности РУ
+  FillNameTable(fMain.TC,fMain.GenTech);
+  fMain.InitializeNPPUnit;
+  application.processmessages;
+ 
+  fWelcome.Hide;
+
+  Application.ShowMainForm := true;
+  fmain.Timer1.Enabled:=true;
+  Application.CreateForm(TfRegime, fRegime);
+  Application.Run;
+end.

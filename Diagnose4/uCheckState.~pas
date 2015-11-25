@@ -1,0 +1,215 @@
+unit uCheckState;
+//------------------------------------------------------------------------------
+//Модуль для определения стабильности на интервале наблюдения
+//08.04.2013 Автор: Семенихин А.В.
+//31.03.2015 изменен
+//------------------------------------------------------------------------------
+
+interface
+uses Contnrs,IniFiles,SysUtils,
+     //--------below my files
+     ubuffer,uKStudent,uBaseTypes;
+
+type TStateParam=record
+    KKS:string[50];
+    ExtIndex:integer;
+    Vdop:double;
+    SigmaMax:double;
+    Binary:boolean;
+    Changed:boolean;
+    Stable:boolean;
+    V:double;
+    SKO:double;
+    Vexcess:boolean;
+    SKOexcess:boolean;
+    end;
+const NullStateParam:TStateParam=(KKS:'';   ExtIndex:-1;   Vdop:0;   SigmaMax:0;   Binary:False;Changed:True;Stable:false;V:0;SKO:0;Vexcess:false; SKOexcess:false;);
+
+type TCheckState= class(TObject)
+     private
+    FCount:integer;
+    FStateParams:array of TStateParam;
+    FStable: boolean;
+    FBuffer:TBuffer;
+    procedure SetCount(const Value: integer);
+    procedure SetStable(const Value: boolean);
+    function GetStateParam(i: integer): TStateParam;
+    procedure SetStateParam(i: integer; const Value: TStateParam);
+    function GetStable: boolean;
+   protected
+     procedure CheckCriterion(Index:integer);
+   public
+     property Count:integer read FCount write SetCount;
+     property Stable:boolean read GetStable write SetStable;
+     property StateParams[i:integer]:TStateParam read GetStateParam write SetStateParam;
+     procedure AddNewParam(Param:TStateParam);
+     procedure DelParam(ParamIndex:integer);
+     procedure LoadFromIni(IniName:string);
+     procedure Initalize;
+     procedure SaveToIni(IniName:string);
+     constructor Create(Buffer:TBuffer);
+     destructor Destroy; override;
+   end;
+
+implementation
+
+
+
+{ TCheckState }
+
+procedure TCheckState.AddNewParam(Param: TStateParam);
+begin
+ SetLength(FStateParams,FCount+1);
+ FStateParams[FCount]:=Param;
+ Fcount:=FCount+1;
+end;
+
+procedure TCheckState.CheckCriterion(Index: integer);
+var i:integer;
+    C0,Sigma:double;
+     enough:boolean;
+begin
+  case FStateParams[Index].Binary of
+  False: // аналоговая переменная оценивается по признаку скорости и среднеквадратичного отклонения
+   begin
+    FStateParams[Index].Stable:=True;
+    //расчитать скорость и СКО
+    if FStateParams[index].ExtIndex<>-1 then
+    begin
+     // проверка на скорость
+     FStateParams[index].V:= FBuffer.CalcValues[FStateParams[index].ExtIndex].A1*3600;
+     if abs(FStateParams[index].V)>FStateParams[index].Vdop then begin FStateParams[index].Vexcess:=True; FStateParams[index].Stable:=False;end else FStateParams[index].Vexcess:=false;
+
+     // проверка на среднеквадратичное отклонение
+     Sigma:=FBuffer.CalcValues[FStateParams[index].ExtIndex].MSE*KStudent(FBuffer.LengthBuf);
+
+        FStateParams[Index].SKO:=Sigma;
+        if Sigma>FStateParams[Index].SigmaMax then begin FStateParams[Index].SKOexcess:=True; FStateParams[Index].Stable:=False;end else  FStateParams[Index].SKOexcess:=False;
+    end;
+
+   end;
+   True: // бинарная переменная оценивается по признаку не изменения значений на всем интервале
+   begin
+
+    C0:=FBuffer.Buffer[FStateParams[index].ExtIndex,0].Value;
+    i:=1;
+    enough:=False;
+    while (i<FBuffer.LengthBuf)and (not enough) do
+    begin
+     if C0<>FBuffer.Buffer[FStateParams[index].ExtIndex,i].Value then enough:=True;
+    end;
+    if enough then
+    begin
+    FStateParams[Index].Changed:=True;
+    FStateParams[Index].Stable:=False;
+    end;
+   end;
+end;
+end;
+constructor TCheckState.Create(Buffer:TBuffer);
+begin
+ Count:=0;
+ FBuffer:=Buffer;
+end;
+
+
+procedure TCheckState.DelParam(ParamIndex: integer);
+var i:integer;
+begin
+ for i:=ParamIndex to FCount-2 do
+ FStateParams[i]:=FStateParams[i+1];
+ FCount:=FCount-1;
+ SetLength(FStateParams,FCount);
+end;
+
+destructor TCheckState.Destroy;
+begin
+ inherited destroy;
+end;
+
+
+function TCheckState.GetStable: boolean;
+var i:integer;
+begin
+ FStable:=True;
+ i:=0;
+ while (i<FCount) and FStable do
+ begin
+  CheckCriterion(i);
+  if not FStateParams[i].Stable then FStable:=False;
+  inc(i);
+ end;
+ Result:=FStable;
+end;
+
+function TCheckState.GetStateParam(i: integer): TStateParam;
+begin
+ Result:=FStateParams[i];
+end;
+
+procedure TCheckState.Initalize;
+ var i,j:integer;
+begin
+ for i:=0 to FCount-1 do
+ begin
+  for j:=0 to FBuffer.CountParam-1 do
+  if StateParams[i].KKS=FBuffer.CalcValues[j].Description.KKS then FStateParams[i].ExtIndex:=j;
+ end;
+end;
+
+procedure TCheckState.LoadFromIni(IniName: string);
+var Ini:TIniFile;
+    i:integer;
+    StateParam:TStateParam;
+begin
+ Ini:=TIniFile.Create(IniName);
+// FTimeDuration:=Ini.ReadInteger('ControlParams','TimeDuration',60);
+ Count:= Ini.ReadInteger('ControlParams','Count',0);
+ for i:=0 to Fcount-1 do
+ begin
+   StateParam:=NullStateParam;
+   StateParam.KKS:=Ini.ReadString('Param_'+inttoStr(i+1),'KKS','');
+//   StateParam.ExtIndex:=Ini.ReadInteger('Param_'+inttoStr(i+1),'ExtIndex',-1);
+   StateParam.Vdop:=Ini.ReadFloat('Param_'+inttoStr(i+1),'Vdop',0);
+   StateParam.SigmaMax:=Ini.ReadFloat('Param_'+inttoStr(i+1),'SigmaMax',0);
+   StateParam.Binary:=Ini.ReadBool('Param_'+inttoStr(i+1),'Binary',false);
+   FStateParams[i]:=StateParam;
+ end;
+end;
+
+procedure TCheckState.SaveToIni(IniName: string);
+var i:integer;
+    Ini:TIniFile;
+begin
+ Ini:=TIniFile.Create(IniName);
+// Ini.WriteInteger('ControlParams','TimeDuration',FTimeDuration);
+ Ini.WriteInteger('ControlParams','Count',FCount);
+ for i:=0 to Fcount-1 do
+ begin
+   Ini.writeString('Param_'+inttoStr(i+1),'KKS',   FStateParams[i].KKS);
+   Ini.writeInteger('Param_'+inttoStr(i+1),'ExtIndex',FStateParams[i].ExtIndex);
+   Ini.writeFloat('Param_'+inttoStr(i+1),'Vdop',FStateParams[i].Vdop);
+   Ini.writeFloat('Param_'+inttoStr(i+1),'SigmaMax',FStateParams[i].SigmaMax);
+   Ini.writeBool('Param_'+inttoStr(i+1),'Binary',FStateParams[i].Binary);
+ end;
+
+end;
+
+procedure TCheckState.SetCount(const Value: integer);
+begin
+  FCount := Value;
+  SetLength(FStateParams,FCount);
+end;
+
+procedure TCheckState.SetStable(const Value: boolean);
+begin
+  FStable := Value;
+end;
+
+procedure TCheckState.SetStateParam(i: integer; const Value: TStateParam);
+begin
+ FStateParams[i]:=Value;
+end;
+
+
+end.
