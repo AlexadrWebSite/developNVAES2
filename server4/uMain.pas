@@ -12,7 +12,7 @@ uses
   Dialogs, StdCtrls, Buttons, ExtCtrls,ScktComp,ComCtrls, TeeProcs, TeEngine,
    Chart, Series, TeeTools,
   //Ниже перечисленны написанные мной units
-  uFEP_File,uCommon, Grids,uStringOperation,uNetSend ;
+  uFEP_File,uCommon, Grids,uStringOperation,uNetSend,log4d;
 
 type
   TfMain = class(TForm)
@@ -68,7 +68,6 @@ type
       end;
 var
   fMain: TfMain;
-
   FEPFile:TFEPFile;
   Data: TValueArray;
   SendData:TSendData;
@@ -78,6 +77,8 @@ var
   PATH:string;
   TXT,Codes:TextFile;
   Busher_NV2:array of array [0..3] of String;
+  //лог
+  logger:TLogLogger;
   procedure GetLastTimeValues(CurPosition:double);
 
   procedure ShowLastValues;
@@ -86,20 +87,27 @@ var
 implementation
 
 
-
-
 {$R *.dfm}
 
 procedure TfMain.FormCreate(Sender: TObject);
 begin
   path:=ExtractFilePath(Application.ExeName);
+
   AssignFile(TXT,PATH+'\ExpFile.txt');
 
   AssignFile(Codes,PATH+'\Codes.txt');
+
+  TLogBasicConfigurator.Configure;
+  TLogLogger.GetRootLogger.Level:= All;
+  logger := TLogLogger.GetLogger('myLogger');
+  logger.AddAppender(TLogFileAppender.Create('filelogger','log4d.log'));
+  logger.Debug('initializing logging');
+
   LoadKKS;
   Params:=TStringList.Create;
   SendData:=TSendData.Create;
   ServerSocket.Active:=True;
+
 end;
 
 procedure TfMain.TimerTimer(Sender: TObject);
@@ -117,17 +125,10 @@ begin
   begin
    SendData.NewSendData(Data);
    Memo1.Lines.Add(IntToStr(ServerSocket.Socket.ActiveConnections));
-//   for i:=0 to ServerSocket.Socket.ActiveConnections-1 do
-//     ServerSocket.Socket.Connections[i].SendText(SendData.SendStr);
   end;
  lCur.Caption:='Текущ. полож: '+intToStr(Round(ChartTool1.xvalue));
  ShowLastValues;
-{ Rewrite(Txt);
- for i:=0 to FEPFile.CountFields-1 do
- WriteLn(txt,FloattoStr(Data[i].Value));
- CloseFile(txt);
- WinExec(PAnsiChar('cmd.exe /c copy /y '+PATH+'\ExpFile.txt '+PATH+'\Data.txt'),0);
- }
+
  lValue.Caption:=SendData.SendStr;
 end;
 
@@ -255,7 +256,10 @@ procedure ShowLastValues;
 var i:integer;
 begin
  for i:=0 to FEPFile.CountFields-1 do
+ begin
   fMain.sgModeBus.Cells[0,i+1]:=FloattoStr(Data[i].Value);
+ fMain.sgModeBus.Cells[5,i+1]:=inttoStr(Data[i].Status);
+ end;
 end;
 
 procedure LoadKKS;
@@ -289,7 +293,7 @@ begin
   s:=Socket.ReceiveText;
   if length(s)>=1 then
   begin
-//  cs:=StrtoInt(s[1]);
+  logger.Debug('getstr = ' + s);
     case s[1] of
       '0': begin memo1.Lines.Add('Client name: '+copy(s,2,l-1));Params.Clear; end;
       '1': begin  SendParams(s) end;
@@ -355,12 +359,14 @@ end;
     s:=copy(s,2,Length(s)-1);
    //получение KKS бушера по KKS НВАЭС
    i:=1;
-   while (i<sgModeBus.RowCount-1) and
-    (s<>sgModeBus.Cells[2,i]) do inc(i);
-    if(i<sgModeBus.RowCount) and(s=sgModeBus.Cells[2,i]) then
-     retValue:= i
-     else    retValue:=-1;
-     Params.Add(IntToStr(retValue));
+   while (i<sgModeBus.RowCount-1) and (s<>sgModeBus.Cells[2,i]) do inc(i);
+    if(i<sgModeBus.RowCount-1) and(s=sgModeBus.Cells[2,i]) then
+    begin
+     retValue:= i;
+     Params.Add(IntToStr(retValue))
+     end
+     else
+     retValue:=0;
     // отправка
     for i:=0 to ServerSocket.Socket.ActiveConnections-1 do
     begin
@@ -371,42 +377,29 @@ end;
  end;
 
 function TfMain.SendValues():String;
- var
+var
   i,j,k:integer;
-  s:string;
-  param:TParam;
-  buf:array [0..23] of byte absolute param;
+  res:string;
 begin
-  s:='';
-  for i:=0 to Params.Count-1 do
+for i:=0 to Params.Count-1 do
   begin
-   j:=1;
-// Memo1.Lines.Add(Params.Strings[i]+' params');
- //  while (j<sgModeBus.RowCount-1)and(Params.Strings[i]<>sgModeBus.Cells[2,j]) do
-   // inc(j);
+   j:=-1;
    j:=StrToInt(Params.Strings[i]);
+   res:='';
      if(j>0) then
      begin
-       param.Id:=j;
-       param.value:= StrToFloat(sgModeBus.Cells[0,j]);
-       param.status:= 0;
+       res:=Params.Strings[i]+' ';
+       res:=res + sgModeBus.Cells[0,j]+' '+ sgModeBus.Cells[5,j]+' ';
      end
      else
-     begin
-     param.Id:=-1;
-       param.value:= StrToFloat('-1');
-       param.status:= 0;
-     end;
-             //отправка параметров
+     res:='-1 0 7';
+     //отправка параметров
       for k:=0 to ServerSocket.Socket.ActiveConnections-1 do
-         ServerSocket.Socket.Connections[k].SendBuf(buf,SizeOf(buf));
-         SendData.Initalize(data);
-        // Memo1.Lines.Add(IntToStr(Params.Count-1));
-
-    //  s:=s+sgModeBus.Cells[2,j]+';'+sgModeBus.Cells[0,j]+';'+TimeToStr(Time)+';1#9';
-
+         ServerSocket.Socket.Connections[k].SendText(res);
+      SendData.Initalize(data);
   end;
-
+        for k:=0 to ServerSocket.Socket.ActiveConnections-1 do
+         ServerSocket.Socket.Connections[k].SendText(' @');
 end;
 
 procedure TfMain.ServerSocketClientConnect(Sender: TObject;

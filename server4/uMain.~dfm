@@ -94,7 +94,7 @@ object fMain: TfMain
   object Chart: TChart
     Left = 8
     Top = 135
-    Width = 401
+    Width = 321
     Height = 271
     Title.Text.Strings = (
       'TChart')
@@ -120,11 +120,12 @@ object fMain: TfMain
     end
   end
   object sgModeBus: TStringGrid
-    Left = 416
+    Left = 336
     Top = 136
-    Width = 436
+    Width = 516
     Height = 279
     Anchors = [akTop, akRight, akBottom]
+    ColCount = 6
     DefaultColWidth = 55
     DefaultRowHeight = 20
     FixedCols = 0
@@ -135,6 +136,7 @@ object fMain: TfMain
       116
       110
       67
+      55
       55)
   end
   object Memo1: TMemo

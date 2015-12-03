@@ -4,6 +4,9 @@ unit uBuffer;
 // ¬ классе TBuffer имеетс€ циклический буфер с равномерно заполннеными данными по времени
 // которые попадают туда из массива последних значений переменных по таймеру = 1 сек.
 //----------------------------------------------------------------------------------------
+// 27.11.2015 ѕоследнее изменение: ѕреобразование TBuffer в считывание всего среза сразу.
+//----------------------------------------------------------------------------------------
+
 interface
 
 uses ExtCtrls,Dialogs,SysUtils,
@@ -48,6 +51,11 @@ type TKKSIndex=record
     end;
 const NullKKSIndex:TKKSIndex=(KKS:'';Index:-1);
 
+//----------------------------------------------------------------------------------------
+// 27.11.2015 ѕоследнее изменение: ѕреобразование TBuffer в считывание всего среза сразу.
+// «анос€тс€ все параметры из файла KKS.txt
+//----------------------------------------------------------------------------------------
+
 type
 TBuffer = class(TObject)
 private
@@ -62,10 +70,9 @@ private
     FCurIndex:integer;
     FFilled:boolean;
     FCalced:boolean;
-    FKKSIndex:array of TKKSIndex;
-    FCountKKSIndex:integer;
+//    FKKSIndex:array of TKKSIndex;
+//    FCountKKSIndex:integer;
     FStartIndex:integer;
-    FKKSQuery:string;
     procedure SetLengthBuffer(const Value: integer);
     procedure FTimerTimer(Sender: TObject);
 
@@ -78,21 +85,16 @@ protected
    procedure NextIndex;
 public
   property CountParam:integer read FCountParam ;
-  property CountKKSIndex:integer read FCountKKSIndex;
+
   property LengthBuf:integer read FLength write SetLengthBuffer;
   property Initalized:boolean read FInitalized;
   property CurIndex:integer read FCurIndex;
   property Filled:boolean read FFilled;
   property Calced:boolean read FCalced;
   property CalcValues[i:integer]:TCalcValue read GetCalcValues;
-
   property LastValues[i:integer]:TValue read GetLastValues;
   property Buffer[i,j:integer]:TValue read GetBuffer;
-  property KKSIndex[i:integer]:TKKSIndex read GetKKSIndex write SetKKSIndex;
-  property KKSQuery:string read FKKSQuery;
-  procedure InitalizeByStr(IndexesString:string);// задать размеры все массивов, по полученной строке с индексами
-  procedure Initalize;// задать размеры все массивов, по полученной строке с индексами
-    procedure Calc;
+  procedure Calc;
   procedure AddValue(Index:integer;Value:TValue);
   procedure StartFilling;
   function LoadKKSFromFile(FileName:string):boolean; // «аполнить кодами KKS из файла (первый шаг)
@@ -109,6 +111,11 @@ implementation
 procedure TBuffer.AddValue(Index:integer;Value: TValue);
 var mid, left, right, key : integer;
 begin
+ // присваиваем значение на Index-1
+{ if Index>0 then
+  FLastValues[Index-1]:=Value;
+  }
+
  // используем двоичный поиск дл€ экономии времени
 
  left:=0; right:=FCountParam-1;
@@ -120,6 +127,7 @@ begin
    else if (key>FCalcValues[mid].Index) then left:=mid+1
    else begin FLastValues[mid]:=Value; exit; end;
  end;
+
 end;
 
 procedure TBuffer.Calc;
@@ -207,7 +215,7 @@ begin
  FCurIndex:=0;
  FFilled:=False;
  FCalced:=False;
- FCountKKSIndex:=0;
+// FCountKKSIndex:=0;
 end;
 
 destructor TBuffer.Destroy;
@@ -239,7 +247,7 @@ end;
 
 function TBuffer.GetKKSIndex(i: integer): TKKSIndex;
 begin
- Result:=FKKSIndex[i];
+// Result:=FKKSIndex[i];
 end;
 
 function TBuffer.GetLastValues(i: integer): TValue;
@@ -247,7 +255,7 @@ begin
  Result:=FLastValues[i];
 end;
 
-
+{
 procedure TBuffer.Initalize;
 var i,j,min,IndexMin:integer;
   SubStr:string;
@@ -296,61 +304,7 @@ begin
  FInitalized:=FCountParam>0;
 
 end;
-
-procedure TBuffer.InitalizeByStr(IndexesString: string);
-var i,j,min,IndexMin:integer;
-  SubStr:string;
-  TempKKSIndex:TKKSIndex;
-begin
-
-// «аполнили индексами массив FKKSIndex
- i:=0;
- while  GetFirstSubStr(SubStr,IndexesString,#9) do
-  if (SubStr<>'') and (i<FCountKKSIndex) then
-   begin
-    FKKSIndex[i].Index:=StrToInt(SubStr);
-    inc(i);
-   end;
-// “еперь надо упор€дочить в пор€дке возрастани€ дл€ последующего использовани€ двоичного поиска
- for i:=0 to FCountKKSIndex-1 do
- begin
-  Min:=FKKSIndex[i].Index;
-  IndexMin:=i;
-  for j:=i+1 to FCountKKSIndex-1 do
-   if FKKSIndex[j].Index<Min then
-   begin
-    Min:=FKKSINdex[j].Index;
-    IndexMin:=j;
-   end;
-   TempKKSIndex:=FKKSIndex[i];
-   FKKSIndex[i]:=FKKSIndex[IndexMin];
-   FKKSIndex[INdexMin]:=TempKKSIndex;
- end;
-// в буфер вносит только существующие параметры, т.е. с индексом -1 необходимо отбросить
-
- i:=0;
- while FKKSIndex[i].Index<0 do inc(i);
- FStartIndex:=i; // занесли последний номер элемента =-1
-
-// ”становить размер дл€ буфера без элементов =-1
- FCountParam:=FCountKKSIndex-FStartIndex;
- SetLength(FCalcValues,FCountParam);
- for i:=0 to FCountParam-1 do
-  begin
-    FCalcValues[i]:=TCalcValue.Create;
-    FCalcValues[i].Index:=FKKSIndex[FStartIndex+i].Index;
-    FCalcValues[i].KKS:=FKKSIndex[FStartIndex+i].KKS;
-  end;
- // установление размера буфера
- SetLength(FBuffer,FCountParam);
- for i:=0 to FCountParam-1 do
-  SetLength(FBuffer[i],FLength);
- // установление размера массива последних значений параметров
- SetLength(FLastValues,FCountParam);
-
- FInitalized:=FCountParam>0;
-
-end;
+ }
 
 
 function TBuffer.LoadKKSFromFile(FileName: string): boolean;
@@ -372,22 +326,29 @@ begin
    end;
    CloseFile(txt);
    // ”становили количество кодов
-   FCountKKSIndex:=i;
-   SetLength(FKKSIndex,FCountKKSIndex);
-   FKKSQuery:='1';
+   FCountParam:=i;
+   SetLength(FCalcValues,FCountParam);
+
    // “еперь считали коды KKS
    i:=0;
    AssignFile(Txt, FileName);
    Reset(txt);
-   while not eof(txt) do
+   for i:=0 to FCountParam-1 do
    begin
     readln(txt,kks);
-    FKKSIndex[i].KKS:=KKS;
-    FKKSQuery:=FKKSQuery+KKS +#9;
-    inc(i);
+    FCalcValues[i]:=TCalcValue.Create;
+    FCalcValues[i].KKS:=KKS;
    end;
-    FKKSQuery:=UpperCase(FKKSQuery);
    closeFile(txt);
+   
+   SetLength(FBuffer,FCountParam);
+   for i:=0 to FCountParam-1 do
+    SetLength(FBuffer[i],FLength);
+   // установление размера массива последних значений параметров
+   SetLength(FLastValues,FCountParam);
+
+   FInitalized:=FCountParam>0;
+
    Result:=True;
   end;
 end;
@@ -404,7 +365,7 @@ end;
 
 procedure TBuffer.SetKKSIndex(i: integer; const Value: TKKSIndex);
 begin
- FKKSIndex[i]:=Value;
+
 end;
 
 procedure TBuffer.SetLengthBuffer(const Value: integer);

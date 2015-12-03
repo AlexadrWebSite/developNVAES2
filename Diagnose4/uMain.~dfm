@@ -1,6 +1,6 @@
 object fMain: TfMain
-  Left = 209
-  Top = 122
+  Left = 226
+  Top = 136
   Width = 991
   Height = 676
   Caption = #1044#1080#1072#1075#1085#1086#1089#1090#1080#1082#1072' '#1057#1042#1056#1050' - '#1086#1073#1082#1072#1090#1082#1072' '#1072#1083#1075#1086#1088#1080#1090#1084#1086#1074
@@ -53,7 +53,7 @@ object fMain: TfMain
         Left = 7
         Top = 24
         Width = 904
-        Height = 669
+        Height = 535
         Anchors = [akLeft, akTop, akRight, akBottom]
         Columns = <
           item

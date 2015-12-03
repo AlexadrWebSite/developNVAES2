@@ -1,0 +1,629 @@
+unit uCalcParamInfo;
+//========================================================
+// Author Semenikhin Alexander, ATE
+// 04.08.2004
+// TCalcParamInfo - class declaration for store information about calculation parameter
+//========================================================
+
+interface
+
+uses Classes,uReadFileInfo,SysUtils,Dialogs;
+
+type
+ TCompareGroup= class(TObject)
+ private
+    FCountSubStr: integer;
+    FName: string;
+    FItems:TStrings;
+    procedure SetName(const Value: string);
+
+ public
+   property Name:string read FName write SetName;
+   property Items:TStrings read FItems write FItems;
+   function ReadGroupFromInputStr(Str:string):boolean;
+   constructor Create;
+   destructor Destroy;
+
+ end;
+
+type TMathOper=record
+     Oper:byte; // 0 *; 1 /;2 +; 3 -; 4 calcExt
+     OperConst:double;
+     end;
+     
+const NullMathOper : TMathOper=(Oper:5;OperConst:0);
+
+function ReadMathOper(s:string):TMathOper;
+function SetMathOper(MathOper:TMathOper):string;
+function IsNullMathOper(MathOper:TMathOper):boolean;
+
+type
+ TCalcOneParamInfo = class(TObject)
+ private
+   FMask:string;
+   FNomenal:double;
+   FNominalMin:double;
+   FNominalMax:double;
+   FMinMaxNominal:boolean;   
+   FSigmaMax:double; // For compare with Sigma_i and Count Outliers
+   FDelta:double; // For compare with Nomenal and parallel chanells
+   FParamName:string;
+   FMUnit:string;
+   FMax:double; // allowed Max value
+   FMin:double; //allowed Min value
+   FPrecesion:integer;
+   FDontUseForReport:boolean;
+   FCompareGroup:array of TCompareGroup;
+   FCompareParamCount:integer;
+    FMathOper: TMathOper;
+    function GetCompareGroup(i: integer): TCompareGroup;
+    procedure SetCompareGroup(const Value: integer);
+    procedure SetMathOper(const Value: TMathOper);
+
+ protected
+
+ public
+   property Mask:string read FMask write FMask;
+   property Nomenal:double read FNomenal write FNomenal;
+   property NominalMax:double read FNominalMax write FNominalMax;
+   property NominalMin:double read FNominalMin write FNominalMin;
+   property MinMaxNominal:boolean Read FMinMaxNominal write FMinMaxNominal;
+   
+   property SigmaMax:double read FSigmaMax write FSigmaMax;
+   property Delta:double read FDElta write FDelta;
+   property ParamName:string read FParamName write FParamName;
+   property Min:double read FMin write FMin;
+   property Max:double read FMax write FMax;
+   property Munit:string read FMUnit write FMunit;
+   property MathOper:TMathOper read FMathOper write SetMathOper;
+
+   property Precesion:integer read FPrecesion write FPrecesion;
+
+   property CompareParamCount:integer read FCompareParamCount write SetCompareGroup;
+   property CompareParam[i:integer]:TCompareGroup read GetCompareGroup;
+   procedure ReadCompareGroups(InputStr:string);
+   constructor Create;
+   destructor Destroy;
+ end;
+
+
+type
+ TCalcParamInfo = class(TObject)
+ private
+  FCount:integer;
+  FArrayCalcOneParamInfo:Array of TCalcOneParamInfo;
+  function GetItems(i: integer): TCalcOneParamInfo;
+    procedure SetCount(const Value: integer);
+ protected
+
+ public
+  function Compare(Mask,ParamName:string):boolean;
+   property Count:integer read Fcount write SetCount;
+   property Items[i:integer]:TCalcOneParamInfo read GetItems;
+   function LoadFromFile(FileName:string):boolean;
+
+   procedure SaveToFile(FileName:string);
+   function Search(ParamName:string;var Index:integer):TCalcOneParamInfo;
+   constructor Create;
+   destructor Destroy;
+ end;
+
+type
+TOneSensorInfo = record
+ CodeName:string [4];
+ KKS:string [20];
+ Delta:double;
+ Precision:integer;
+ Name:string [20];
+ MUnit:string[10];
+ Value:double;
+ Count:integer;
+ FileIndex:integer;
+ FieldIndex:integer;
+ end;
+const NullOneSensorInfo:TOneSensorInfo = (CodeName:'';KKS:'';Delta:0;Precision:0;Name:'';MUnit:'';Value:-1;Count:0;FileIndex:-1;FieldIndex:-1);
+
+type TSensorsInfo =array of TOneSensorInfo;
+procedure ReadSensorsInfo(FileName:string;var SensorsInfo:TSensorsInfo);
+procedure ClearCounter(var SensorsInfo:TSensorsInfo);
+implementation
+
+{ TCalcOneParamInfo }
+
+constructor TCalcOneParamInfo.Create;
+begin
+ inherited Create;
+ FNomenal:=-1;
+ FSigmaMax:=-1;
+ FDelta:=-1;
+ FMask:='';
+ FParamName:=' - ';
+ FMUnit:=' - ';
+ FMax:=-1;
+ FMin:=-1;
+ FCompareGroup:=nil;
+ FCompareParamCount:=0;
+ FMathOper:=NullMathOper;
+end;
+
+destructor TCalcOneParamInfo.Destroy;
+var i:byte;
+begin
+
+for i:=0 to FCompareParamCount-1 do
+ FCompareGroup[i].Destroy;
+ Setlength(FCompareGroup,0);
+inherited Destroy;
+end;
+{
+function TCalcOneParamInfo.GetCompareTreeList(Node: byte): TStrings;
+begin
+ Result:=FCompareTreeList[Node];
+end;
+
+procedure TCalcOneParamInfo.SetUpCompareTreeList;
+//var i:byte;
+begin
+FCountNode:= FMaskCompareList.Count;
+SetLength(FCompareTreeList,FCountNode);
+for i:=0 to FCountNode-1 do
+FCompareTreeList[i]:=TStringList.Create;
+end;
+}
+function TCalcOneParamInfo.GetCompareGroup(i: integer): TCompareGroup;
+begin
+ Result:= FCompareGroup[i];
+end;
+
+procedure TCalcOneParamInfo.ReadCompareGroups(InputStr: string);
+begin
+ inc(FCompareParamCount);
+ SetLength(FCompareGroup,FCompareParamCount);
+ FCompareGroup[FCompareParamCount-1]:=TCompareGroup.Create;
+ FCompareGroup[FCompareParamCount-1].ReadGroupFromInputStr(InputStr);
+end;
+
+procedure TCalcOneParamInfo.SetCompareGroup(const Value: integer);
+var i:integer;
+begin
+  if FCompareParamCount< Value then
+  begin
+   SetLength(FCompareGroup,Value);
+   for i:=FCompareParamCount to Value-1 do
+   FCompareGroup[i]:=TCompareGroup.Create;
+   FCompareParamCount:=Value;
+  end;
+
+  if FCompareParamCount> Value then
+  begin
+   for i:=value to FCompareParamCount-1 do
+   FCompareGroup[i].Destroy;
+   SetLength(FCompareGroup,Value);
+   FCompareParamCount:=0;
+  end;
+end;
+
+procedure TCalcOneParamInfo.SetMathOper(const Value: TMathOper);
+begin
+  FMathOper := Value;
+end;
+
+{ TCalcParamInfo }
+
+function TCalcParamInfo.Compare(Mask, ParamName:string): boolean;
+var i,Strlength:integer;
+begin
+Result:=True;
+StrLength:=Length(Mask);
+if Strlength<>Length(ParamName) then Result:=False;
+if Result then
+begin
+ i:=1;
+ while (i<StrLength+1) and Result do
+ begin
+  if Mask[i]<>'?' then
+     if Mask[i]<>ParamName[i] then Result:=False;
+  inc(i);
+ end;
+end;
+end;
+
+constructor TCalcParamInfo.Create;
+begin
+ inherited Create;
+end;
+
+destructor TCalcParamInfo.Destroy;
+begin
+ SetLength(FArrayCalcOneParamInfo,0);
+end;
+
+function TCalcParamInfo.GetItems(i: integer): TCalcOneParamInfo;
+begin
+ result:=FArrayCalcOneParamInfo[i];
+end;
+
+function TCalcParamInfo.LoadFromFile(FileName: string):boolean;
+var i,j,PosD:integer;
+    Txt:TextFile;
+    TempStr,Substr,CompItem:string;
+    DecS:char;
+begin
+ Result:=False;
+ if not FileExists(FileName) then Exit;
+ AssignFile(Txt,FileName);
+ Reset(Txt);
+ I:=0;
+ while Not EOF(Txt) do
+  begin
+   Readln(Txt);
+   inc(i);
+  end;
+ CloseFile(Txt);
+ FCount:=i-1; // Check!!!
+ SetLength(FArrayCalcOneParamInfo,0);
+ SetLength(FArrayCalcOneParamInfo,FCount);
+
+ for I:=0 to FCount-1 do
+ FArrayCalcOneParamInfo[i]:=TCalcOneParamInfo.Create;
+// -- now we  are starting read
+ Reset(Txt);
+ Readln(Txt,TempStr); // first recors = Fileds names
+ DecS:=DecimalSeparator;
+// if pos('.',TempStr)<>0 then DecimalSeparator:='.' else DecimalSeparator:=',';
+ DecimalSeparator:='.';
+ i:=0;
+ while Not EOF(Txt) do
+  begin
+   Readln(Txt,TempStr);
+   if GetFirstSubStr(Substr,TempStr,#9) then
+     FArrayCalcOneParamInfo[i].Mask:=Substr;
+
+   if GetFirstSubStr(Substr,TempStr,#9) then
+     try
+     if SubStr='' then FArrayCalcOneParamInfo[i].Nomenal:=-1 else
+     begin
+      PosD:=Pos('/',SubStr);
+      FArrayCalcOneParamInfo[i].MinMaxNominal:=(PosD>0 );
+      if FArrayCalcOneParamInfo[i].MinMaxNominal then
+      begin
+       FArrayCalcOneParamInfo[i].NominalMin:=StrToFloat(Copy(SubStr,1,PosD-1));
+       FArrayCalcOneParamInfo[i].NominalMax:=StrToFloat(Copy(SubStr,PosD+1,Length(SubStr)-PosD));
+      end else
+     FArrayCalcOneParamInfo[i].Nomenal:=StrToFloat(SubStr);
+     end;
+     except
+     FArrayCalcOneParamInfo[i].Nomenal:=-1;
+     end;
+
+   if GetFirstSubStr(Substr,TempStr,#9) then
+     try
+     if SubStr='' then FArrayCalcOneParamInfo[i].Delta:=-1 else
+     FArrayCalcOneParamInfo[i].Delta:=StrToFloat(SubStr);
+     except
+     FArrayCalcOneParamInfo[i].Delta:=-1;
+     end;
+   if GetFirstSubStr(Substr,TempStr,#9) then
+     try
+     if SubStr='' then FArrayCalcOneParamInfo[i].SigmaMax:=-1 else
+     FArrayCalcOneParamInfo[i].SigmaMax:=StrToFloat(SubStr);
+     except
+     FArrayCalcOneParamInfo[i].SigmaMax:=-1;
+     end;
+   if GetFirstSubStr(Substr,TempStr,#9) then
+     try
+     if SubStr='' then FArrayCalcOneParamInfo[i].Min:=-1 else
+     FArrayCalcOneParamInfo[i].Min:=StrToFloat(SubStr);
+     except
+     FArrayCalcOneParamInfo[i].Min:=-1;
+     end;
+
+   if GetFirstSubStr(Substr,TempStr,#9) then
+     try
+     if SubStr='' then FArrayCalcOneParamInfo[i].Max:=-1 else
+     FArrayCalcOneParamInfo[i].Max:=StrToFloat(SubStr);
+     except
+     FArrayCalcOneParamInfo[i].Max:=-1;
+     end;
+   if GetFirstSubStr(Substr,TempStr,#9) then
+     try
+     if SubStr='' then FArrayCalcOneParamInfo[i].Precesion:=-1 else
+     FArrayCalcOneParamInfo[i].Precesion:=StrToInt(SubStr);
+     except
+     FArrayCalcOneParamInfo[i].Precesion:=-1;
+     end;
+
+   if GetFirstSubStr(Substr,TempStr,#9) then
+     if SubStr='' then FArrayCalcOneParamInfo[i].ParamName:=' - ' else
+     FArrayCalcOneParamInfo[i].ParamName:=SubStr;
+  if GetFirstSubStr(Substr,TempStr,#9) then
+     if SubStr='' then FArrayCalcOneParamInfo[i].Munit:=' - ' else
+     FArrayCalcOneParamInfo[i].Munit:=SubStr;
+
+  if GetFirstSubStr(Substr,TempStr,#9) then
+     if SubStr='' then FArrayCalcOneParamInfo[i].MathOper:=NullMathOper else
+     FArrayCalcOneParamInfo[i].MathOper:=REadMathOper(SubStr);
+
+   for j:=0 to 3 do // max count of groups for compare is 4!!!
+   begin
+   if GetFirstSubStr(Substr,TempStr,#9) then // read name of compare group
+     if SubStr<>'' then
+     begin
+     FArrayCalcOneParamInfo[i].CompareParamCount:=FArrayCalcOneParamInfo[i].CompareParamCount+1;
+     FArrayCalcOneParamInfo[i].CompareParam[j].Name:=Substr;
+     if GetFirstSubStr(Substr,TempStr,#9) then // if there are items in compare group
+     begin
+      while GetFirstSubStr(CompItem,Substr,';') do //
+      FArrayCalcOneParamInfo[i].CompareParam[j].Items.Add(CompItem);
+      if Length(Substr)>1 then
+      FArrayCalcOneParamInfo[i].CompareParam[j].Items.Add(Substr);
+
+     end;
+     end;
+
+   end;
+
+   inc(i);
+  end;
+ CloseFile(Txt);
+ DecimalSeparator:=DecS;
+
+ Result:=True;
+end;
+
+procedure TCalcParamInfo.SaveToFile(FileName: string);
+var i,j,k:integer;
+    TempStr:string;
+    Txt:TextFile;
+begin
+
+ AssignFile(Txt,FileName);
+ Rewrite(Txt);
+ TempStr:='KKS  Nominal Delta SigmaMax  Min Max Precession  Name  Munit MathOperation CompareGroup';
+ Writeln(Txt,TempStr);
+ For i:=0 to FCount-1 do
+ begin
+ case FArrayCalcOneParamInfo[i].MinMaxNominal of
+ False:
+  TempStr:=FArrayCalcOneParamInfo[i].Mask+#9+
+           Floattostr(FArrayCalcOneParamInfo[i].Nomenal)+#9+
+           Floattostr(FArrayCalcOneParamInfo[i].Delta)+#9+
+           Floattostr(FArrayCalcOneParamInfo[i].SigmaMax)+#9+
+           Floattostr(FArrayCalcOneParamInfo[i].Min)+#9+
+           Floattostr(FArrayCalcOneParamInfo[i].Max)+#9+
+           Floattostr(FArrayCalcOneParamInfo[i].Precesion)+#9+
+           FArrayCalcOneParamInfo[i].ParamName+#9+
+           FArrayCalcOneParamInfo[i].Munit;
+  True:
+  TempStr:=FArrayCalcOneParamInfo[i].Mask+#9+
+           Floattostr(FArrayCalcOneParamInfo[i].FNominalMin)+'/'+
+           Floattostr(FArrayCalcOneParamInfo[i].FNominalMax)+#9+
+           Floattostr(FArrayCalcOneParamInfo[i].Delta)+#9+
+           Floattostr(FArrayCalcOneParamInfo[i].SigmaMax)+#9+
+           Floattostr(FArrayCalcOneParamInfo[i].Min)+#9+
+           Floattostr(FArrayCalcOneParamInfo[i].Max)+#9+
+           Floattostr(FArrayCalcOneParamInfo[i].Precesion)+#9+
+           FArrayCalcOneParamInfo[i].ParamName+#9+
+           FArrayCalcOneParamInfo[i].Munit;
+  end;
+
+  TempStr:=TempStr+#9;
+  if not ((FArrayCalcOneParamInfo[i].MathOper.Oper=NullMathOper.Oper) and (FArrayCalcOneParamInfo[i].MathOper.OperConst=NullMathOper.OperConst)) then
+  TempStr:=TempStr+SetMathOper(FArrayCalcOneParamInfo[i].MathOper);
+
+ for j:=0 to FArrayCalcOneParamInfo[i].CompareParamCount-1 do
+ begin
+   TempStr:=TempStr+#9+FArrayCalcOneParamInfo[i].CompareParam[j].Name+#9;
+   for k:=0 to FArrayCalcOneParamInfo[i].CompareParam[j].Items.Count-1 do
+    TempStr:=TempStr+FArrayCalcOneParamInfo[i].CompareParam[j].Items.Strings[k]+';';
+ end;
+ Writeln(Txt,TempStr);
+
+ end;
+
+ CloseFile(Txt);
+end;
+
+function TCalcParamInfo.Search(ParamName: string; var Index:integer): TCalcOneParamInfo;
+var i:integer;
+begin
+result:=nil;
+i:=0;
+Index:=-1;
+while (i<FCount) and (Result=nil) do
+  begin
+    if Compare(FArrayCalcOneParamInfo[i].Mask,ParamName) then
+     begin
+      Result:=FArrayCalcOneParamInfo[i];
+      Index:=i;
+     end;
+    inc(i);
+  end;
+end;
+
+procedure TCalcParamInfo.SetCount(const Value: integer);
+var i:integer;
+begin
+  if FCount< Value then
+  begin
+   SetLength(FArrayCalcOneParamInfo,Value);
+   for i:=FCount to Value-1 do
+   FArrayCalcOneParamInfo[i]:=TCalcOneParamInfo.Create;
+   FCount:=Value;
+  end;
+
+  if FCount> Value then
+  begin
+   for i:=value to FCount-1 do
+   FArrayCalcOneParamInfo[i].Destroy;
+   SetLength(FArrayCalcOneParamInfo,Value);
+   FCount:=0;
+  end;
+end;
+
+
+{ TCompareGroupi }
+
+constructor TCompareGroup.Create;
+begin
+ inherited Create;
+ Fname:='';
+ FItems:=TStringList.Create;
+end;
+
+destructor TCompareGroup.Destroy;
+begin
+ FItems.Destroy;
+ inherited Destroy;
+end;
+
+
+function TCompareGroup.ReadGroupFromInputStr(Str: string): boolean;
+var i,Pos1,Pos2:integer;
+    TempStr:String;
+begin
+result:=false;
+if length(Str)=0 then Exit;
+// Search Name
+ pos1:=pos('<',Str);
+ Pos2:=pos('>',Str);
+ if (Pos2>pos1) and (Pos1>0) then
+ FName:=copy(Str,Pos1+1,Pos2-pos1-1);
+// Search Masks
+// think!!!
+if pos2>0 then
+ TempStr:=Copy(Str,Pos2+1,Length(Str)-Pos2)
+ else TempStr:=Str;
+ { pos1:=pos(' ',Str);
+  if pos1>0 then
+  TempStr:=Copy(TempStr,Pos1+1,Length(tempStr)-pos1);}
+  if Length(TempStr)<7 then Exit;
+
+  while GetFirstSubStr(Str, TempStr,';')do
+  FItems.Add(Str);
+Result:=True;
+end;
+
+
+procedure TCompareGroup.SetName(const Value: string);
+begin
+  FName := Value;
+end;
+
+Function ReadMathOper(s:string):TMathOper;
+begin
+Result:=NullMathOper;
+if Length(S)>1 then
+  begin
+    case s[1] of
+     '*':Result.Oper:=0;
+     '/':Result.Oper:=1;
+     '+':Result.Oper:=2;
+     '-':Result.Oper:=3;
+     '#':Result.Oper:=4;
+    end;
+    if Result.Oper<4 then
+    try
+     Result.OperConst:=StrToFloat(Copy(s,2,Length(s)-1));
+    except
+      Result:=NullMathOper;
+      MessageDlg('Invalid Float value:'+Copy(s,2,Length(s)-1),mtInformation,mbOKCancel,0);
+    end;
+  end;
+end;
+
+Function SetMathOper(MathOper:TMathOper):string;
+begin
+ if( (MathOper.Oper=NullMathOper.Oper) and (MathOper.OperConst=NullMathOper.OperConst)) then Result:='';
+ case MathOper.Oper of
+  0: Result:='*'+Floattostr(MathOper.OperConst);
+  1: Result:='/'+Floattostr(MathOper.OperConst);
+  2: Result:='+'+Floattostr(MathOper.OperConst);
+  3: Result:='-'+Floattostr(MathOper.OperConst);
+  4: Result:='#CalcDen';
+  end;
+end;
+
+function IsNullMathOper(MathOper:TMathOper):boolean;
+begin
+ if (MathOper.Oper=NullMathOper.Oper) and (MathOper.OperConst = NullMathOper.OperConst) then
+ Result:=True else Result:=False;
+end;
+
+procedure ReadSensorsInfo(FileName:string;var SensorsInfo:TSensorsInfo);
+var i,j,PosD,Count:integer;
+    Txt:TextFile;
+    TempStr,Substr,CompItem:string;
+    DecS:char;
+begin
+
+ if not FileExists(FileName) then Exit;
+ AssignFile(Txt,FileName);
+ Reset(Txt);
+ I:=0;
+ while Not EOF(Txt) do
+  begin
+   Readln(Txt);
+   inc(i);
+  end;
+ CloseFile(Txt);
+ Count:=i;
+// Count:=i-1; // Check!!!
+ SetLength(SensorsInfo,0);
+ SetLength(SensorsInfo,Count);
+
+ Reset(Txt);
+ Readln(Txt,TempStr); // first recors = Fileds names
+ DecS:=DecimalSeparator;
+ DecimalSeparator:='.';
+ i:=1;
+ while Not EOF(Txt) do
+  begin
+   Readln(Txt,TempStr);
+   SensorsInfo[i]:=NullOneSensorInfo;
+   if GetFirstSubStr(Substr,TempStr,#9) then
+     SensorsInfo[i].CodeName:=Substr;
+
+   if GetFirstSubStr(Substr,TempStr,#9) then
+     SensorsInfo[i].KKS:=Substr;
+
+   if GetFirstSubStr(Substr,TempStr,#9) then
+    try
+    if SubStr='' then SensorsInfo[i].Delta:=-1 else
+     SensorsInfo[i].Delta:=StrToFloat(SubStr);
+     except
+      SensorsInfo[i].Delta:=-1
+     end;
+
+   if GetFirstSubStr(Substr,TempStr,#9) then
+     try
+     if SubStr='' then SensorsInfo[i].Precision:=0 else
+      SensorsInfo[i].Precision:=StrToInt(SubStr);
+     except
+     SensorsInfo[i].Precision:=0;
+     end;
+
+   if GetFirstSubStr(Substr,TempStr,#9) then
+   SensorsInfo[i].Name:=SubStr;
+
+   if GetFirstSubStr(Substr,TempStr,#9) then
+   SensorsInfo[i].MUnit:=SubStr;
+
+   inc(i);
+  end;
+ CloseFile(Txt);
+ DecimalSeparator:=DecS;
+ end;
+
+procedure ClearCounter(var SensorsInfo:TSensorsInfo);
+var i:integer;
+begin
+ for i:=0 to length(SensorsInfo) -1 do
+ begin
+ SensorsInfo[i].Count:=0;
+ SensorsInfo[i].Value:=0;
+ end;
+
+end;
+
+end.

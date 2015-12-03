@@ -1,6 +1,6 @@
 object fWelcome: TfWelcome
-  Left = 372
-  Top = 398
+  Left = 540
+  Top = 386
   BorderStyle = bsSingle
   Caption = #1047#1072#1087#1091#1089#1082' '#1044#1080#1072#1075#1085#1086#1089#1090#1080#1082#1080' '#1057#1042#1056#1050
   ClientHeight = 328
@@ -418,7 +418,7 @@ object fWelcome: TfWelcome
     Top = 200
     Width = 521
     Height = 17
-    TabOrder = 0
+    TabOrder = 1
   end
   object bCancel: TButton
     Left = 464
@@ -426,7 +426,7 @@ object fWelcome: TfWelcome
     Width = 75
     Height = 25
     Caption = #1054#1090#1084#1077#1085#1072
-    TabOrder = 1
+    TabOrder = 0
     OnClick = bCancelClick
   end
 end

@@ -13,17 +13,17 @@ uses uGenTech, uBuffer,IniFiles,SysUtils,uStringOperation, uSrvCoreTVS, uCalcPar
 type TSVRD = class(TObject)
              private
               FDPZ:array [1..7] of TParam;
-              FQED:array [1..7] of TParam;
+          //    FQED:array [1..7] of TParam;
               FNTVS:integer;
     function GetDPZ(i: integer): TParam;
     procedure SetDPZ(i: integer; const Value: TParam);
-    function GetQED(i: integer): TParam;
-    procedure SetQED(i: integer; const Value: TParam);
+  //  function GetQED(i: integer): TParam;
+  //  procedure SetQED(i: integer; const Value: TParam);
              protected
 
              public
                property DPZ[i:integer]:TParam read GetDPZ write SetDPZ;
-               property QED[i:integer]:TParam read GetQED write SetQED;
+           //    property QED[i:integer]:TParam read GetQED write SetQED;
 
                property NTVS:integer read FNTVS write FNTVS;
 
@@ -37,7 +37,7 @@ type TSVRD = class(TObject)
 type TIDPZ = class(TObject)
     private
       FSVRD:array [1..54]of TSVRD;
-      FK1NED:TParam;
+
       FSrvCoreTVS:TSrvCoreTVS;
     function GetSVRD(i: integer): TSVRD;
     procedure SetSVRD(i: integer; const Value: TSVRD);
@@ -45,11 +45,11 @@ type TIDPZ = class(TObject)
 
     public
       property SVRD[i:integer]:TSVRD read GetSVRD write SetSVRD;
-      property K1NED:TParam read FK1NED write FK1NED;
+//      property K1NED:TParam read FK1NED write FK1NED;
       procedure LinkBuffer(Buffer:TBuffer);
       procedure Calc_Power(KN:double;Buffer:TBuffer);//если бы были расчеты по ИР, то можно было бы с ними сравнить  
 
-      constructor Create(DPZIni:TIniFile);
+      constructor Create(DPZIni:TIniFile;IniFile:TIniFile);
       destructor Destroy;
     published
 
@@ -79,23 +79,23 @@ function TSVRD.GetDPZ(i: integer): TParam;
 begin
  Result:=FDPZ[i];
 end;
-
+{
 
 function TSVRD.GetQED(i: integer): TParam;
 begin
 Result:=FQED[i];
 end;
-
+ }
 procedure TSVRD.SetDPZ(i: integer; const Value: TParam);
 begin
  FDPZ[i]:=Value;
 end;
-
+  {
 procedure TSVRD.SetQED(i: integer; const Value: TParam);
 begin
  FQED[i]:=Value;
 end;
-
+   }
 { TIDPZ }
 
 procedure TIDPZ.Calc_Power(KN: double; Buffer: TBuffer);
@@ -193,7 +193,7 @@ begin
       end;
 end;
 
-constructor TIDPZ.Create(DPZIni:TIniFile);
+constructor TIDPZ.Create(DPZIni:TIniFile;IniFile:TIniFile);
 var i,j:integer;
 begin
  inherited Create;
@@ -221,12 +221,12 @@ begin
  }
  end;
  FSrvCoreTVS:=TSrvCoreTVS.Create;
- FSrvCoreTVS.LoadFromMunit(DPZIni.ReadString('SrvCoreTVS','FileName','d:\Semenikhin\Develop_NVAES2\Diagnose\Diagnose3\Res\SrvCoreTvs.idb' ));
+ FSrvCoreTVS.LoadFromMunit(IniFile.ReadString('SrvCoreTVS','FileName','d:\Semenikhin\Develop_NVAES2\Diagnose\Diagnose3\Res\SrvCoreTvs.idb' ));
 
- FK1NED:=TParam.Create;
+{ FK1NED:=TParam.Create;
  FK1NED.Description.KKS:='K1NED';
  FK1NED.Description.Name:='Нормировочный коэффициент, показывающий разницу энерговыделения в местах расположения ДПЗ'
-
+ }
 end;
 
 destructor TIDPZ.Destroy;
@@ -263,6 +263,7 @@ begin
    end;
  end;
 ///------------QED  ---------------------
+{
  for i:=1 to 54 do
  begin
   for j:=1 to 7 do
@@ -279,7 +280,7 @@ begin
      end;
    end;
  end;
-
+ }
 end;
 
 procedure TIDPZ.SetSVRD(i: integer; const Value: TSVRD);

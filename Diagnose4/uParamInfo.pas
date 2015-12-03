@@ -216,7 +216,7 @@ begin
        i:=0;
        while (k<Buffer.CountParam)  do
        begin
-         if EqualMask(buffer.KKSIndex[k].KKS, Param.CalcParamInfo.ParallelChannel[ParalIndex].KKSMask)
+         if EqualMask(buffer.CalcValues[k].KKS, Param.CalcParamInfo.ParallelChannel[ParalIndex].KKSMask)
          then
            begin
             if Param.Description.KKS<>buffer.CalcValues[k].KKS then

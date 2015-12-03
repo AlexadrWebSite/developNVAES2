@@ -1,0 +1,478 @@
+unit uBuffer;
+//----------------------------------------------------------------------------------------
+// Описание хранение данных в циклическом буфере
+// В классе TBuffer имеется циклический буфер с равномерно заполннеными данными по времени
+// которые попадают туда из массива последних значений переменных по таймеру = 1 сек.
+//----------------------------------------------------------------------------------------
+interface
+
+uses ExtCtrls,Dialogs,SysUtils,
+  //=====files below written by myself=====================================
+     uBaseTypes,uNetSend,uStringOperation,uDescription;
+type
+ TCalcValue=Class(TObject)
+ private
+    FStatus: byte;
+    FA1: double;
+    FA0: double;
+    FMSE: double;
+    FRateOfChange: double;
+    FMean: double;
+    FIndex: integer;
+  //  FDescrition:TDescription;
+    FKKS:string;
+    procedure SetA0(const Value: double);
+    procedure SetA1(const Value: double);
+    procedure SetIndex(const Value: integer);
+    procedure SetMean(const Value: double);
+    procedure SetMSE(const Value: double);
+    procedure SetRateOfChange(const Value: double);
+    procedure SetStatus(const Value: byte);
+
+ public
+ property Mean:double read FMean write SetMean;
+ property Status:byte read FStatus write SetStatus;
+ property MSE:double read FMSE write SetMSE;
+ property A0:double read FA0 write SetA0;// Y=A0+А1*x, х - номер отсчета в секундах в буффере, Y - апроксимирующая прямая
+ property A1:double read FA1 write SetA1;
+ property RateOfChange:double read FRateOfChange write SetRateOfChange;
+ property Index:integer read FIndex write SetIndex;
+ property KKS:string read FKKS write FKKS;
+  constructor Create;
+  destructor Destroy;
+ end;
+
+type TKKSIndex=record
+    KKS:string[50];
+    Index:integer;
+    end;
+const NullKKSIndex:TKKSIndex=(KKS:'';Index:-1);
+
+type
+TBuffer = class(TObject)
+private
+    FTimer:TTimer;
+    FBuffer:array of array of TValue;
+    FLastValues:TValueArray;
+    FCalcValues: array of TCalcValue;
+    FDescriptions:array of TDescription;
+    FCountParam: integer;
+    FLength: integer;
+    FInitalized: boolean;
+    FCurIndex:integer;
+    FFilled:boolean;
+    FCalced:boolean;
+    FKKSIndex:array of TKKSIndex;
+    FCountKKSIndex:integer;
+    FStartIndex:integer;
+    FKKSQuery:string;
+    procedure SetLengthBuffer(const Value: integer);
+    procedure FTimerTimer(Sender: TObject);
+
+    function GetCalcValues(i: integer): TCalcValue;
+    function GetBuffer(i, j: integer): TValue;
+    function GetLastValues(i: integer): TValue;
+    function GetKKSIndex(i: integer): TKKSIndex;
+    procedure SetKKSIndex(i: integer; const Value: TKKSIndex);
+protected
+   procedure NextIndex;
+public
+  property CountParam:integer read FCountParam ;
+  property CountKKSIndex:integer read FCountKKSIndex;
+  property LengthBuf:integer read FLength write SetLengthBuffer;
+  property Initalized:boolean read FInitalized;
+  property CurIndex:integer read FCurIndex;
+  property Filled:boolean read FFilled;
+  property Calced:boolean read FCalced;
+  property CalcValues[i:integer]:TCalcValue read GetCalcValues;
+
+  property LastValues[i:integer]:TValue read GetLastValues;
+  property Buffer[i,j:integer]:TValue read GetBuffer;
+  property KKSIndex[i:integer]:TKKSIndex read GetKKSIndex write SetKKSIndex;
+  property KKSQuery:string read FKKSQuery;
+  procedure InitalizeByStr(IndexesString:string);// задать размеры все массивов, по полученной строке с индексами
+  procedure Initalize;// задать размеры все массивов, по полученной строке с индексами
+    procedure Calc;
+  procedure AddValue(Index:integer;Value:TValue);
+  procedure StartFilling;
+  function LoadKKSFromFile(FileName:string):boolean; // Заполнить кодами KKS из файла (первый шаг)
+  constructor Create(DefaultLength:integer=180);
+  destructor Destroy;
+published
+
+end;
+
+implementation
+
+{ TBuffer }
+
+procedure TBuffer.AddValue(Index:integer;Value: TValue);
+var mid, left, right, key : integer;
+begin
+ // используем двоичный поиск для экономии времени
+
+ left:=0; right:=FCountParam-1;
+ Key:=Index;
+ while left<=right do
+ begin
+   mid:=left+(right-left) div 2;
+   if (key< FCalcValues[mid].Index) then right:=mid-1
+   else if (key>FCalcValues[mid].Index) then left:=mid+1
+   else begin FLastValues[mid]:=Value; exit; end;
+ end;
+end;
+
+procedure TBuffer.Calc;
+var i,j,count,CountOk:integer;
+    SumX,SumY,sumX2,SumXY,Sum:double;
+    X_mean:double;
+begin
+ for i:=0 to FCountParam-1 do
+ begin
+// расчитать по МНК с учетом равномерного шага по шкале Х
+// учитываются только данные с достоверными значениями. Если все не достоверные, то и среднее значение не достоверное
+// расчет ведется на циклическом буфере, потому на 2-х участках: с CurIndex до конца и с нулевого индекса до CurIndex
+// y = A0 + A1*x
+// -----------------------------
+  SumX:=0;
+  SumY:=0;
+  SumX2:=0;
+  SumXY:=0;
+
+  CountOk:=0;
+  // первый участок с CurIndex до конца
+  for j :=FCurIndex+1  to FLength-1 do
+  if  (FBuffer[i][j].Status= Status_OK) then
+  begin
+   SumX:=SumX+j;// speed 1/sec
+   SumY:=SumY+FBuffer[i][j].Value;
+   SumX2:=SumX2+j*j;
+   SumXY:=SumXY+j*FBuffer[i][j].Value;
+   inc(CountOk);
+  end;
+  // второй участок с нулевого индекса до CurIndex
+  for j :=0 to FCurIndex do
+  if  (FBuffer[i][j].Status=Status_OK) then
+  begin
+   SumX:=SumX+j;// speed 1/ sec
+   SumY:=SumY+FBuffer[i][j].Value;
+   SumX2:=SumX2+j*j;
+   SumXY:=SumXY+j*FBuffer[i][j].Value;
+   inc(CountOk);
+  end;
+
+  if CountOk>0 then
+  case countOk=1 of
+   False:
+          begin
+          X_mean:=SumX/CountOk;
+          if (SumX2 - X_mean*SumX ) <> 0 then
+          begin
+           FCalcValues[i].A1:=(SumXY-X_mean*SumY)/(SumX2 - X_mean*SumX );
+           FCalcValues[i].A0:=SumY/CountOk -FCalcValues[i].A1*X_mean;
+          end;
+         end;
+   True:
+         begin
+           FCalcValues[i].A1:=0;
+           FCalcValues[i].A0:=SumY;
+         end;
+   end
+   else
+   FCalcValues[i].Status:=Status_Invalid;
+   FCalcValues[i].Mean:=FCalcValues[i].A0+ FCalcValues[i].A1*FLength/2 ;
+   // теперь расчитаем СКО
+ Sum:=0;
+ for j :=0 to FLength-1 do
+    Sum:=Sum+ SQR( FBuffer[i][j].Value-FCalcValues[i].A0+FCalcValues[i].A1*j);
+
+ FCalcValues[i].MSE:=SQRT(Sum/(FLength-1));
+ FCalcValues[i].RateOfChange:=FCalcValues[i].A1*60;
+
+// FSigma:=FSigma*KStudent(CountPoint);// 1.96; // К стюдента=1.96 для доверительной вероятности95%
+
+end;
+FCalced:=True;
+end;
+
+constructor TBuffer.Create(DefaultLength:integer=180);
+begin
+ inherited Create;
+ FCountParam:=0;
+ FLength:=DefaultLength;
+ FTimer:=TTimer.Create(nil);
+ FTimer.Interval:=1000;
+ FTimer.Enabled:=False;
+ FTimer.OnTimer:=FTimerTimer;
+ FCurIndex:=0;
+ FFilled:=False;
+ FCalced:=False;
+ FCountKKSIndex:=0;
+end;
+
+destructor TBuffer.Destroy;
+begin
+ FTimer.Destroy;
+
+ LengthBuf:=0;
+ inherited Destroy;
+end;
+
+procedure TBuffer.FTimerTimer(Sender: TObject);
+var i:integer;
+begin
+ for i:=0 to FCountParam-1 do
+  FBuffer[i][FCurIndex]:=FLastValues[i];
+// if FFilled then Calc;
+ NextIndex;
+end;
+
+function TBuffer.GetBuffer(i, j: integer): TValue;
+begin
+ Result:=FBUffer[i,j];
+end;
+
+function TBuffer.GetCalcValues(i: integer): TCalcValue;
+begin
+ Result:=FCalcValues[i];
+end;
+
+function TBuffer.GetKKSIndex(i: integer): TKKSIndex;
+begin
+ Result:=FKKSIndex[i];
+end;
+
+function TBuffer.GetLastValues(i: integer): TValue;
+begin
+ Result:=FLastValues[i];
+end;
+
+
+procedure TBuffer.Initalize;
+var i,j,min,IndexMin:integer;
+  SubStr:string;
+  TempKKSIndex:TKKSIndex;
+begin
+
+// Заполнили индексами массив FKKSIndex
+
+// Теперь надо упорядочить в порядке возрастания для последующего использования двоичного поиска
+ for i:=0 to FCountKKSIndex-1 do
+ begin
+  Min:=FKKSIndex[i].Index;
+  IndexMin:=i;
+  for j:=i+1 to FCountKKSIndex-1 do
+   if FKKSIndex[j].Index<Min then
+   begin
+    Min:=FKKSINdex[j].Index;
+    IndexMin:=j;
+   end;
+   TempKKSIndex:=FKKSIndex[i];
+   FKKSIndex[i]:=FKKSIndex[IndexMin];
+   FKKSIndex[INdexMin]:=TempKKSIndex;
+ end;
+// в буфер вносит только существующие параметры, т.е. с индексом -1 необходимо отбросить
+
+ i:=0;
+ while FKKSIndex[i].Index<0 do inc(i);
+ FStartIndex:=i; // занесли последний номер элемента =-1
+
+// Установить размер для буфера без элементов =-1
+ FCountParam:=FCountKKSIndex-FStartIndex;
+ SetLength(FCalcValues,FCountParam);
+ for i:=0 to FCountParam-1 do
+  begin
+    FCalcValues[i]:=TCalcValue.Create;
+    FCalcValues[i].Index:=FKKSIndex[FStartIndex+i].Index;
+    FCalcValues[i].KKS:=FKKSIndex[FStartIndex+i].KKS;
+  end;
+ // установление размера буфера
+ SetLength(FBuffer,FCountParam);
+ for i:=0 to FCountParam-1 do
+  SetLength(FBuffer[i],FLength);
+ // установление размера массива последних значений параметров
+ SetLength(FLastValues,FCountParam);
+
+ FInitalized:=FCountParam>0;
+
+end;
+
+procedure TBuffer.InitalizeByStr(IndexesString: string);
+var i,j,min,IndexMin:integer;
+  SubStr:string;
+  TempKKSIndex:TKKSIndex;
+begin
+
+// Заполнили индексами массив FKKSIndex
+ i:=0;
+ while  GetFirstSubStr(SubStr,IndexesString,#9) do
+  if (SubStr<>'') and (i<FCountKKSIndex) then
+   begin
+    FKKSIndex[i].Index:=StrToInt(SubStr);
+    inc(i);
+   end;
+// Теперь надо упорядочить в порядке возрастания для последующего использования двоичного поиска
+ for i:=0 to FCountKKSIndex-1 do
+ begin
+  Min:=FKKSIndex[i].Index;
+  IndexMin:=i;
+  for j:=i+1 to FCountKKSIndex-1 do
+   if FKKSIndex[j].Index<Min then
+   begin
+    Min:=FKKSINdex[j].Index;
+    IndexMin:=j;
+   end;
+   TempKKSIndex:=FKKSIndex[i];
+   FKKSIndex[i]:=FKKSIndex[IndexMin];
+   FKKSIndex[INdexMin]:=TempKKSIndex;
+ end;
+// в буфер вносит только существующие параметры, т.е. с индексом -1 необходимо отбросить
+
+ i:=0;
+ while FKKSIndex[i].Index<0 do inc(i);
+ FStartIndex:=i; // занесли последний номер элемента =-1
+
+// Установить размер для буфера без элементов =-1
+ FCountParam:=FCountKKSIndex-FStartIndex;
+ SetLength(FCalcValues,FCountParam);
+ for i:=0 to FCountParam-1 do
+  begin
+    FCalcValues[i]:=TCalcValue.Create;
+    FCalcValues[i].Index:=FKKSIndex[FStartIndex+i].Index;
+    FCalcValues[i].KKS:=FKKSIndex[FStartIndex+i].KKS;
+  end;
+ // установление размера буфера
+ SetLength(FBuffer,FCountParam);
+ for i:=0 to FCountParam-1 do
+  SetLength(FBuffer[i],FLength);
+ // установление размера массива последних значений параметров
+ SetLength(FLastValues,FCountParam);
+
+ FInitalized:=FCountParam>0;
+
+end;
+
+
+function TBuffer.LoadKKSFromFile(FileName: string): boolean;
+var Txt:TextFile;
+  i:integer;
+  KKS:string;
+begin
+ Result:=False;
+ if FileExists(FileName) then
+  begin
+   // первый раз считали, что бы посчитать количество строк, т.е кодов KKS
+   AssignFile(Txt, FileName);
+   Reset(txt);
+   i:=0;
+   while not EOF(txt) do
+   begin
+    Readln(txt);
+    inc(i);
+   end;
+   CloseFile(txt);
+   // Установили количество кодов
+   FCountKKSIndex:=i;
+   SetLength(FKKSIndex,FCountKKSIndex);
+   FKKSQuery:='1';
+   // Теперь считали коды KKS
+   i:=0;
+   AssignFile(Txt, FileName);
+   Reset(txt);
+   while not eof(txt) do
+   begin
+    readln(txt,kks);
+    FKKSIndex[i].KKS:=KKS;
+    FKKSQuery:=FKKSQuery+KKS +#9;
+    inc(i);
+   end;
+    FKKSQuery:=UpperCase(FKKSQuery);
+   closeFile(txt);
+   Result:=True;
+  end;
+end;
+
+procedure TBuffer.NextIndex;
+begin
+ inc(FCurIndex);
+ if FCurIndex=FLength then
+ begin
+  FFilled:=True;
+  FCurIndex:=0;
+ end;
+end;
+
+procedure TBuffer.SetKKSIndex(i: integer; const Value: TKKSIndex);
+begin
+ FKKSIndex[i]:=Value;
+end;
+
+procedure TBuffer.SetLengthBuffer(const Value: integer);
+begin
+  FLength := Value;
+end;
+
+
+procedure TBuffer.StartFilling;
+begin
+ FTimer.Enabled:=True;
+end;
+
+{ TCalcValue }
+
+constructor TCalcValue.Create;
+begin
+  FMean:=0;
+  FStatus:=0;
+  FMSE:=0;
+  FA0:=0;
+  FA1:=0;
+  FRateOfChange:=0;
+  FIndex:=-1;
+//  FDescrition:=TDescription.Create;
+  KKS:='';
+  inherited Create;
+end;
+
+destructor TCalcValue.Destroy;
+begin
+//   FDescrition.Destroy;
+   inherited Destroy;
+end;
+
+procedure TCalcValue.SetA0(const Value: double);
+begin
+  FA0 := Value;
+end;
+
+procedure TCalcValue.SetA1(const Value: double);
+begin
+  FA1 := Value;
+end;
+
+procedure TCalcValue.SetIndex(const Value: integer);
+begin
+  FIndex := Value;
+end;
+
+procedure TCalcValue.SetMean(const Value: double);
+begin
+  FMean := Value;
+end;
+
+procedure TCalcValue.SetMSE(const Value: double);
+begin
+  FMSE := Value;
+end;
+
+procedure TCalcValue.SetRateOfChange(const Value: double);
+begin
+  FRateOfChange := Value;
+end;
+
+procedure TCalcValue.SetStatus(const Value: byte);
+begin
+  FStatus := Value;
+end;
+
+end.

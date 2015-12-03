@@ -37,7 +37,7 @@ type TSVRD = class(TObject)
 type TIDPZ = class(TObject)
     private
       FSVRD:array [1..54]of TSVRD;
-      FK1NED:TParam;
+
       FSrvCoreTVS:TSrvCoreTVS;
     function GetSVRD(i: integer): TSVRD;
     procedure SetSVRD(i: integer; const Value: TSVRD);
@@ -45,11 +45,11 @@ type TIDPZ = class(TObject)
 
     public
       property SVRD[i:integer]:TSVRD read GetSVRD write SetSVRD;
-      property K1NED:TParam read FK1NED write FK1NED;
+//      property K1NED:TParam read FK1NED write FK1NED;
       procedure LinkBuffer(Buffer:TBuffer);
       procedure Calc_Power(KN:double;Buffer:TBuffer);//если бы были расчеты по ИР, то можно было бы с ними сравнить  
 
-      constructor Create(DPZIni:TIniFile);
+      constructor Create(DPZIni:TIniFile;IniFile:TIniFile);
       destructor Destroy;
     published
 
@@ -193,7 +193,7 @@ begin
       end;
 end;
 
-constructor TIDPZ.Create(DPZIni:TIniFile);
+constructor TIDPZ.Create(DPZIni:TIniFile;IniFile:TIniFile);
 var i,j:integer;
 begin
  inherited Create;
@@ -221,12 +221,12 @@ begin
  }
  end;
  FSrvCoreTVS:=TSrvCoreTVS.Create;
- FSrvCoreTVS.LoadFromMunit(DPZIni.ReadString('SrvCoreTVS','FileName','d:\Semenikhin\Develop_NVAES2\Diagnose\Diagnose3\Res\SrvCoreTvs.idb' ));
+ FSrvCoreTVS.LoadFromMunit(IniFile.ReadString('SrvCoreTVS','FileName','\Files\SrvCoreTvs.idb' ));
 
- FK1NED:=TParam.Create;
+{ FK1NED:=TParam.Create;
  FK1NED.Description.KKS:='K1NED';
  FK1NED.Description.Name:='Нормировочный коэффициент, показывающий разницу энерговыделения в местах расположения ДПЗ'
-
+ }
 end;
 
 destructor TIDPZ.Destroy;

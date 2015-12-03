@@ -190,29 +190,29 @@ begin
  begin
  // сначала поищем код средневзвешанной мощности РУ
   if FRU.Nakz.Description.ID=-1 then
-    if  FRU.Nakz.Description.KKS=Buffer.CalcValues[i].Description.KKS then
+    if  FRU.Nakz.Description.KKS=Buffer.CalcValues[i].KKS { CalcValues[i]. Description.KKS} then
      begin FRU.Nakz.Description.ID:= i;FRU.Nakz.Value:=Buffer.LastValues[i];end;
 
   if FRU.Naknp.Description.ID=-1 then
-    if  FRU.Naknp.Description.KKS=Buffer.CalcValues[i].Description.KKS then
+    if  FRU.Naknp.Description.KKS=Buffer.CalcValues[i].KKS then
      begin FRU.Naknp.Description.ID:= i;FRU.Naknp.Value:=Buffer.LastValues[i];end;
 
  if FRU.Ndpz.Description.ID=-1 then
-    if  FRU.Ndpz.Description.KKS=Buffer.CalcValues[i].Description.KKS then
+    if  FRU.Ndpz.Description.KKS=Buffer.CalcValues[i].KKS then
      begin FRU.Ndpz.Description.ID:= i;FRU.Ndpz.Value:=Buffer.LastValues[i];end;
 
   // теперь поищем коды датчиков температуры в горячих нитках ГЦТ
   for j:=1 to 4 do
    for k:=0 to FRU.Loops[j].HotLeg.CountTSens-1 do
    if FRU.Loops[j].HotLeg.TSens[k].Description.ID=-1 then
-    if FRU.Loops[j].HotLeg.TSens[k].Description.KKS=Buffer.CalcValues[i].Description.KKS then
+    if FRU.Loops[j].HotLeg.TSens[k].Description.KKS=Buffer.CalcValues[i].KKS  then
       begin FRU.Loops[j].HotLeg.TSens[k].Description.ID:= i;FRU.Loops[j].HotLeg.TSens[k].Value:= Buffer.LastValues[i];end;
 
   // теперь поищем коды датчиков температуры в холодных нитках ГЦТ
   for j:=1 to 4 do
    for k:=0 to FRU.Loops[j].ColdLeg.CountTSens-1 do
    if FRU.Loops[j].ColdLeg.TSens[k].Description.ID=-1 then
-    if FRU.Loops[j].ColdLeg.TSens[k].Description.KKS=Buffer.CalcValues[i].Description.KKS then
+    if FRU.Loops[j].ColdLeg.TSens[k].Description.KKS=Buffer.CalcValues[i].KKS then
       begin FRU.Loops[j].ColdLeg.TSens[k].Description.ID:= i;FRU.Loops[j].ColdLeg.TSens[k].Value:= Buffer.LastValues[i];end;
 
  end;
@@ -258,8 +258,12 @@ function TNPPUnit.Regim(Buffer:TBuffer): TRegimeType;
 var i,j:integer;
 begin
 // сначала присвоение внутренностям FRU последних значений из TBuffer
+Result:=rt_Unknown;
+if FRU.Nakz.Description.ID=-1 then exit;
 FRU.Nakz.Value:=Buffer.LastValues[FRU.Nakz.description.id];
+if FRU.Naknp.description.id=-1 then exit;
 FRU.Naknp.Value:=Buffer.LastValues[FRU.Naknp.description.id];
+if FRU.Ndpz.description.id=-1 then exit;
 FRU.Ndpz.Value:=Buffer.LastValues[FRU.Ndpz.description.id];
 for i:=1 to 4 do
 begin

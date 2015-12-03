@@ -5,6 +5,8 @@ unit uMain;
 // Автор: Семенихин А.В. semenikhinav@mail.ru
 // Дата создания: 20/04/2015
 //----------------------------------------------------------------------------------------
+// Последнее изменение: Преобразование TBuffer в считывание всего среза сразу.
+//----------------------------------------------------------------------------------------
 
 interface
 
@@ -116,7 +118,6 @@ type
     Timer1: TTimer;
     miDebugInfo: TMenuItem;
     procedure FormCreate(Sender: TObject);
-    procedure Button3Click(Sender: TObject);
     procedure Timer1Timer(Sender: TObject);
     procedure ShowNPPUnit;
     procedure SaveTxt(Var Txt:TextFile);
@@ -170,11 +171,7 @@ type
     procedure AddToChartHistory; // Добавление на график количество недостоверных параметров
     procedure SaveToArchive; // Сохранить в архив
   end;
-type
-  indexkks=record
-    index:integer;
-    kks:String
-    end;
+
 const
 
     getDataparam=1;
@@ -183,6 +180,7 @@ const
 var
   fMain: TfMain;
   Txt:TextFile;
+   IniFile:TIniFile; // основной настроечный файл Diagnose.ini
    IpAddress:string;//'127.0.0.1';
    port:integer;//=1050;
    clientId:integer;
@@ -201,12 +199,14 @@ uses uNetSend, uWelcome, uRegimeForm, uDebugForm, uAutoCalcSettings  ,
 
 procedure TfMain.FormCreate(Sender: TObject);
 var  IniName:string;
-     IniFile:TIniFile;
 begin
- Buffer:=TBuffer.Create(5);
+ IniName:=copy(Application.ExeName,1,length(Application.ExeName)-3)+'ini';
+ Inifile:=TIniFile.Create(iniName);
+
+ Buffer:=TBuffer.Create(IniFile.ReadInteger('Buffer','Length',5));
  DecimalSeparator:='.';
  NPPUnit:=TNPPUnit.Create;
- TimeScheduler:=TTimeScheduler.Create(20);
+ TimeScheduler:=TTimeScheduler.Create(IniFile.ReadInteger('TimeScheduler','Interval',20));
  PTKZPanel[1]:=Panel1;
  PTKZPanel[2]:=Panel2;
  PTKZPanel[3]:=Panel3;
@@ -216,18 +216,11 @@ begin
  TC_power_ini:=TIniFile.Create(ExtractFilePath(Application.exename)+'TC_power.ini' );
  MakeNameNoteTable;//Заголовок для таблиц со списком недостоверных параметров
 
- IniName:=copy(Application.ExeName,1,length(Application.ExeName)-3)+'ini';
- Inifile:=TIniFile.Create(iniName);
  IpAddress:=IniFile.ReadString('Server','IpAddress','127.0.0.1');
  Port:=IniFile.ReadInteger('Server','Port',1050);
  getId:=0;
 end;
 
-procedure TfMain.Button3Click(Sender: TObject);
-
-begin
-fMain.LoadKKSSendKKS;
-end;
 
 procedure TfMain.Timer1Timer(Sender: TObject);
 var
@@ -245,12 +238,14 @@ begin
    Sleep(100);
   //fDebugForm.Memo.Lines.Add(IntToStr(Buffer.CountParam));
   //добавление данных в буфер
-  for i:=0 to Buffer.CountKKSIndex-1 do
-   if  Buffer.KKSIndex[i].index<>-1 then
+  for i:=0 to Buffer.CountParam-1 do
+   if  Buffer.CalcValues[i].Index<>-1 then
     begin
-     val.Value:= GetFloat(clientId,getId,Buffer.KKSIndex[i].index);
-     val.Status:=GetStatus(clientId,getId,Buffer.KKSIndex[i].index);
-     Buffer.AddValue(Buffer.KKSIndex[i].index, val);
+     val.Value:= GetFloat(clientId,getId,Buffer.CalcValues[i].Index);
+     if GetStatus(clientId,getId,Buffer.CalcValues[i].Index)<> D_STATUS_UNDEF then
+      val.Status:=Status_Ok else Val.Status:=Status_Invalid;
+      Val.DateTime:=now;
+      Buffer.AddValue(Buffer.CalcValues[i].Index, val);
      // fDebugForm.Memo.Lines.Add(IntToStr(kksList[i].index) + ' '+ floatToStr(val.value));
     end;
  // fDebugForm.Memo.Lines.Add(IntToStr(Buffer.CountParam) + ' count '+ IntToStr(currentIndex));
@@ -260,7 +255,7 @@ begin
   Buffer.StartFilling;
    except
      ShowMessage('Error');
-     end;
+   end;
 //-----------------
   if TimeScheduler.LastTime<>0 then
   sbState.Panels.Items[3].Text:='Последняя проверка '+DateTimeToStr(TimeScheduler.LastTime )+' прошло '+IntToStr(round((Now-TimeScheduler.LastTime)*86400)) +' сек.';
@@ -282,7 +277,7 @@ begin
               //-------------
               TC.Calc_Power(TC_power_ini,NPPUnit.RU.Nakz.Value.Value/3000,Buffer);
               IDPZ.Calc_Power(NPPUnit.RU.Nakz.Value.Value/3000,Buffer);
-              N.Calculate(TC,GenTech,Buffer,NIni);
+              N.Calculate(TC,GenTech,Buffer,NIni,IDPZ);
 
               //Сохранить в архиве
               SaveToArchive;
@@ -393,7 +388,6 @@ end;
 procedure TfMain.LoadKKSSendKKS;
 var
  i:integer;
-  KKSIndex:TKKSIndex;
 begin
 with fWelcome do
   begin
@@ -402,15 +396,14 @@ with fWelcome do
 
    Buffer.LoadKKSFromFile(ExtractFileDir(application.ExeName)+'\KKS.txt');
    fWelcome.ProgressBar.Position:=0;
-   fWelcome.ProgressBar.Max:=Buffer.CountKKSIndex div 10;
+   fWelcome.ProgressBar.Max:=Buffer.CountParam div 10;
 //   MessageDlg('Max='+InttoStr(fWelcome.ProgressBar.Max),mtInformation,[mbOk],0);
    application.processmessages;
 
-   for i:=0  to Buffer.CountKKSIndex-1 do
+   for i:=0  to Buffer.CountParam-1 do
     begin
-     KKSIndex:=Buffer.KKSIndex[i];
-     KKSIndex.Index:=Insert(clientId,getId,Pchar(string(Buffer.KKSIndex[i].KKS)),0,0);
-     Buffer.KKSIndex[i]:=KKSIndex;
+     Buffer.CalcValues[i].Index:=Insert(clientId,getId,Pchar(string(Buffer.CalcValues[i].KKS)),0,0);
+
      if (i div 10)=i/10 then
       begin
         fWelcome.ProgressBar.Position:=fWelcome.ProgressBar.Position+1;
@@ -418,16 +411,25 @@ with fWelcome do
       end;
     end;
     lInfo.Caption:='Формирование списка запрашиваемых параметров у сервера завершено!';
+
     lInfo.Caption:='Подписка на список параметров....';
    Subscribe(ClientID,GetID);
    fWelcome.ProgressBar.Position:=0;
+   i:=0;
    while (GetChannelStatus(ClientID,GetID)and D_STATUS_SUBSCRIBED)<>D_STATUS_SUBSCRIBED do
    begin
     fWelcome.ProgressBar.Position:=fWelcome.ProgressBar.Position+1;
     SendMessage(fWelcome.ProgressBar.Handle,WM_PAINT,0,0);
     sleep(500);
+    inc(i);
+    if (i div 2)=(i/2) then
+     begin
+      lInfo.Caption:='Не удается подписаться по списку параметров '+inttoStr(round(i/2))+' секунд';
+      SendMessage(fWelcome.Handle,WM_PAINT,0,0);
+      application.ProcessMessages;
+     end; 
    end;
-   Buffer.Initalize;
+
    FilllvData(Buffer);
    lInfo.Caption:='Подписка завершена!';
    fWelcome.ProgressBar.Position:=0;
@@ -448,7 +450,7 @@ begin
   fWelcome.lInfo.Caption:='Инициализация объекта, описывающего блок АЭС...';
   fDebugForm.Memo.Lines.Add(fWelcome.lInfo.Caption);
 
- if not NPPUnit.Initalize(ExtractFilePath( Application.ExeName)+'NPPUnit.ini')
+ if not NPPUnit.Initalize(ExtractFilePath( Application.ExeName)+'Files\NPPUnit.ini')
  then MessageDlg('Не иницилизованы датчики в классе NPPUnit',mtWarning,[mbOk],0);
  strings:=TStringList.Create;
  if not NPPUnit.Link(Buffer,strings) then
@@ -1088,10 +1090,10 @@ end;
 procedure TfMain.InitalizeDPZ;
 var DPZini:TIniFile;
 begin
-  DPZini:=TIniFile.Create(ExtractFilePath(Application.exename)+'DPZ.ini');
+  DPZini:=TIniFile.Create( IniFile.ReadString('Nini','FileName','\Files\N.ini'));
   fWelcome.lInfo.Caption:='Привязка токов ДПЗ к расчетным значениям в буфере...';
 
-  IDPZ:=TIDPZ.Create(DPZini);
+  IDPZ:=TIDPZ.Create(DPZini,IniFile);
   IDPZ.LinkBuffer(Buffer);
 
    GenTech.LinkBuffer(Buffer);
@@ -1120,12 +1122,10 @@ begin
 end;
 
 procedure TfMain.InitalizeN;
-var IniName:string;
-    IniFile:TIniFile;
 begin
- N:=TN.Create;
- IniName:=copy(Application.ExeName,1,length(Application.ExeName)-3)+'ini';
-  Inifile:=TIniFile.Create(iniName);
+ N:=TN.Create(GenTech,IniFile);
+ // IniName:=copy(Application.ExeName,1,length(Application.ExeName)-3)+'ini';
+//  Inifile:=TIniFile.Create(iniName);
 
 // N.LoadRCPChar(Inifile.ReadString('RCPCharacteristics','FileName','d:\Semenikhin\Develop_NVAES2\Diagnose\Diagnose3\1RCP.txt'));
  N.LoadRCPChar(Inifile.ReadString('ABC','FileName','d:\Semenikhin\Develop_NVAES2\Diagnose\Diagnose3\gcn.dat'));

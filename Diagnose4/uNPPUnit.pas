@@ -258,8 +258,12 @@ function TNPPUnit.Regim(Buffer:TBuffer): TRegimeType;
 var i,j:integer;
 begin
 // сначала присвоение внутренностям FRU последних значений из TBuffer
+Result:=rt_Unknown;
+if FRU.Nakz.Description.ID=-1 then exit;
 FRU.Nakz.Value:=Buffer.LastValues[FRU.Nakz.description.id];
+if FRU.Naknp.description.id=-1 then exit;
 FRU.Naknp.Value:=Buffer.LastValues[FRU.Naknp.description.id];
+if FRU.Ndpz.description.id=-1 then exit;
 FRU.Ndpz.Value:=Buffer.LastValues[FRU.Ndpz.description.id];
 for i:=1 to 4 do
 begin

@@ -6,7 +6,7 @@ unit uPowerCalc;
 //========================================================
 
 interface
-uses uStringOperation,SysUtils,matrices,uDLL,uCalcParamInfo;
+uses uStringOperation,SysUtils,matrices,uDLL,uCalcParamInfo,uDPZ,uNetSend;
 
 const TKelvin0=273.15;
       Pabs=0.1;
@@ -17,8 +17,9 @@ type TPhysValue =record
   Value:double;
   Error:double;
   Status:byte;
+  Index:integer;
   end;
-const NullPhysValue:TPhysValue=(Value:0;Error:0;Status:1);
+const NullPhysValue:TPhysValue=(Value:0;Error:0;Status:1;Index:-1);
 
 type PPhysValue = ^TPhysValue;
 type
@@ -134,13 +135,17 @@ type TNAKNP=record
 
 procedure NullNAKNP(var NAKNP:TNAKNP);
 
-type TNDPZ=record
+type TNdpz=record
   Value:TPhysValue;
   QED:array[1..54]of array[1..7] of TPhysValue;
   KDPZ:TPhysValue;
   end;
 
-  stopped here!!!
+procedure NullNDPZ(var Ndpz:TNDPZ);
+
+procedure CalcNdpz(var Ndpz:TNdpz;IDPZ:TIDPZ);
+
+
 //-----------Общая мощность--------------
 Type TN =record
   Value:TPhysValue;
@@ -827,5 +832,40 @@ begin
  NAKNP.Value:=NullPhysValue;
  for i:=1 to 8 do
  NAKNP.Channels[i]:=NullPhysValue;
+end;
+
+procedure NullNDPZ(var Ndpz:TNDPZ);
+var i,j:integer;
+begin
+  Ndpz.Value:=NullPhysValue;
+  for i:=1 to 54 do
+   for j:=1 to 7 do
+   Ndpz.QED[i][j]:=NullPhysValue;
+  Ndpz.KDPZ:=NullPhysValue;
+
+end;
+
+procedure CalcNdpz(var Ndpz:TNdpz;IDPZ:TIDPZ);
+var i,j,SumDost:integer;
+    SumQED:double;
+begin
+ SumDost:=0;
+ SumQED:=0;
+ for i:=1 to 54 do
+  for j:=1 to 7 do
+    if IDPZ.SVRD[i].DPZ[j].Valid and IDPZ.SVRD[i].DPZ[j].Serviceable then
+    begin
+     inc(SumDost);
+     SumQED:=SumQED+Ndpz.QED[i][j].Value;
+   end;
+ if SumDost>0 then
+  begin
+   SumQED:=SumQED/SumDost;
+   Ndpz.Value.Value:= Ndpz.KDPZ.Value*3.75*163*SumQED;
+   Ndpz.Value.Status:=Status_OK;
+  end else
+  NDpz.Value.Status:=Status_Invalid;
+
+
 end;
 end.

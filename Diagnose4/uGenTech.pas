@@ -252,10 +252,12 @@ for i:=1 to 6 do
    begin
    FPTKZ[i].Params[j].Note:='';
     if FPTKZ[i].Params[j].description.ID<>-1 then
+     begin
      FPTKZ[i].Params[j].Error:=Buffer.CalcValues[FPTKZ[i].Params[j].description.ID].MSE*KStudent(Buffer.LengthBuf);
      if FPTKZ[i].Params[j].CalcParamInfo<>nil then
      FPTKZ[i].Params[j].Serviceable:=not (FPTKZ[i].Params[j].Error> FPTKZ[i].Params[j].CalcParamInfo.Delta);
      if not FPTKZ[i].Params[j].Serviceable then FPTKZ[i].Params[j].Note:='СКО ('+FloattoStrF(FPTKZ[i].Params[j].Error,ffFixed,3+FPTKZ[i].Params[j].CalcParamInfo.Precision ,FPTKZ[i].Params[j].CalcParamInfo.Precision)+')больше допустимого дельта('+FLoattoSTrF(FPTKZ[i].Params[j].CalcParamInfo.Delta,ffFixed,FPTKZ[i].Params[j].CalcParamInfo.Precision+3,FPTKZ[i].Params[j].CalcParamInfo.Precision)+');';
+     end;
    end;
   end;
 // расчет достоверности по признаку равенству номиналу
